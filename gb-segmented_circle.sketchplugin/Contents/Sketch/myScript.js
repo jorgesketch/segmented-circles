@@ -1,0 +1,439 @@
+//(c)2019 German Bauer. All code covered by the BSD 2-clause style license ./LICENSE.md in this package
+// Updated for modern Sketch compatibility
+
+var doc, pi, pArray, def
+var r, segs, idealsegs, vals, thickness, omit, stMaj, stMin, nMaj, nMin, dash, gap
+
+var onRun = function(context) {
+  doc = context.document
+  pi = Math.PI
+
+  r = 100
+  segs = idealsegs = 6
+  vals = "40,30,20,10,5"
+  thickness = 20
+  omit = 0
+  stMaj = 4
+  stMin = 2
+  nMaj = 12
+  nMin = 4
+  dash = 32
+  gap = 16
+
+  pArray = []
+  def = NSUserDefaults.standardUserDefaults()
+}
+
+var c_seg = function(context){onRun(context);start("seg")}
+var c_var = function(context){onRun(context);start("var")}
+var c_dsh = function(context){onRun(context);start("dsh")}
+var c_tix = function(context){onRun(context);start("tix")}
+
+var start = function(whichOne){
+  switch (whichOne) {
+
+    case "var":
+      var key = "gb_segCircle_var"
+      var sc = JSON.parse(def.objectForKey(key)) || {el:[
+                                                          {label: "Outer radius", data:r},
+                                                          {label: "Values", data:vals},
+                                                          {label: "Thickness", data:thickness},
+                                                          {label: "Bottom cutout angle", data: omit}
+                                                      ]}
+      var inp = showDlg(
+        "Variable Segments Circle",
+        "Input radius, values and thickness.\nUse a thickness of 1 or less to create lines instead of areas. \n\nValues are a comma seperated list of numbers.",
+        sc.el,
+        "Create Circle")
+      if (inp == nil) return
+
+      sc.el[0].data = parseInt(inp[0])
+      sc.el[1].data = inp[1].split(",").join(",")
+      sc.el[2].data = parseInt(inp[2])
+      sc.el[3].data = parseInt(inp[3])
+      def.setObject_forKey_(JSON.stringify(sc), key)
+      varSegmentCircle(sc.el[0].data, sc.el[1].data.split(","), sc.el[2].data, deg2rdns(sc.el[3].data))
+    break;
+
+    case "tix":
+      var key = "gb_segCircle_tix"
+      var sc = JSON.parse(def.objectForKey(key)) || {el:[
+                                                          {label: "Outer radius major ticks", data: r},
+                                                          {label: "Outer radius minor ticks", data: r-5},
+                                                          {label: "Major ticks", data: nMaj},
+                                                          {label: "Minor ticks in between", data: nMin},
+                                                          {label: "Major ticks stroke", data: stMaj},
+                                                          {label: "Minor ticks stroke", data: stMin},
+                                                          {label: "Major ticks length", data: thickness},
+                                                          {label: "Minor ticks length", data: thickness/2},
+                                                          {label: "Bottom cutout angle", data: omit}
+                                                      ]}
+      var inp = showDlg(
+        "Ticks Circle",
+        "Input values for major and minor ticks.",
+        sc.el,
+        "Create Circle")
+      if (inp == nil) return
+
+      sc.el[0].data = parseInt(inp[0])
+      sc.el[1].data = parseInt(inp[1])
+      sc.el[2].data = parseInt(inp[2])
+      sc.el[3].data = parseInt(inp[3])
+      sc.el[4].data = parseInt(inp[4])
+      sc.el[5].data = parseInt(inp[5])
+      sc.el[6].data = parseInt(inp[6])
+      sc.el[7].data = parseInt(inp[7])
+      sc.el[8].data = parseInt(inp[8])
+      def.setObject_forKey_(JSON.stringify(sc), key)
+      ticksCircle(sc.el[0].data, sc.el[1].data, sc.el[2].data, sc.el[3].data, sc.el[4].data, sc.el[5].data, sc.el[6].data, sc.el[7].data, deg2rdns(sc.el[8].data))
+    break;
+
+    case "dsh":
+      var key = "gb_segCircle_dsh"
+      var sc = JSON.parse(def.objectForKey(key)) || {el:[
+                                                          {label: "Outer radius", data: r},
+                                                          {label: "Length of dashes", data: dash},
+                                                          {label: "Length of gaps", data: gap},
+                                                          {label: "Thickness", data: nMin}
+                                                      ]}
+      var inp = showDlg(
+        "Circle with dashes",
+        "Input values for outer radius, lengths of dashes and gaps and thickness.\nUse a thickness of 1 or less to create lines instead of areas.",
+        sc.el,
+        "Create Circle")
+      if (inp == nil) return
+
+      sc.el[0].data = parseInt(inp[0])
+      sc.el[1].data = parseInt(inp[1])
+      sc.el[2].data = parseInt(inp[2])
+      sc.el[3].data = parseInt(inp[3])
+      def.setObject_forKey_(JSON.stringify(sc), key)
+      dashedCircle(sc.el[0].data, sc.el[1].data, sc.el[2].data, sc.el[3].data)
+    break;
+
+    default:
+      var key = "gb_segCircle_seg"
+      var sc = JSON.parse(def.objectForKey(key)) || {el:[
+                                                          {label: "Outer radius", data: r},
+                                                          {label: "Number of segments", data: segs},
+                                                          {label: "Thickness", data: thickness},
+                                                          {label: "Bottom cutout angle", data: omit}
+                                                      ]}
+      var inp = showDlg(
+        "Segmented circle",
+        "Input values for outer radius, number of segments, thickness etc. \nUse a thickness of 1 or less to create lines instead of areas.",
+        sc.el,
+        "Create Circle")
+      if (inp == nil) return
+
+      sc.el[0].data = parseInt(inp[0])
+      sc.el[1].data = parseInt(inp[1])
+      sc.el[2].data = parseInt(inp[2])
+      sc.el[3].data = parseInt(inp[3])
+      def.setObject_forKey_(JSON.stringify(sc), key)
+      segmentCircle(sc.el[0].data, sc.el[1].data, sc.el[2].data, deg2rdns(sc.el[3].data))
+  }
+}
+
+var segmentCircle = function(rCirc, numSegs, nThick, angOmit){
+  var gr = mkGroup(doc.currentPage(), "Segments circle")
+  var c = getRnCol()
+  var bP = makeBasePlate(rCirc, nThick)
+  gr.addLayers([bP])
+
+  var angRange = 2 * pi - angOmit
+  var angCor = (angOmit > 0) ? pi - (angOmit / 2) : 0
+  var angSeg = angRange / numSegs
+
+  for(var i = 0; i < numSegs; i++){
+    var shape = makeArcSeg(angSeg * i - angCor, angSeg * (i + 1) - angCor, rCirc, nThick)
+    if (nThick > 1) {styleShapeArea(shape, c)} else {styleShape(shape, c)}
+    shape.setName("Segment " + (i + 1))
+    gr.addLayers([shape]);
+  }
+  placeLayer(gr)
+}
+
+var varSegmentCircle = function(rCirc, aSegments, nThick, angOmit){
+  var numSegs = aSegments.length
+  var aSegs = preProcSeg(aSegments, angOmit)
+  var angCor = (angOmit > 0) ? pi - (angOmit / 2) : 0
+
+  var gr = mkGroup(doc.currentPage(), "Variable segments circle")
+  var bP = makeBasePlate(rCirc, nThick)
+  gr.addLayers([bP])
+  var aUsedCols = []
+  for(var i = 0; i < numSegs; i++){
+    var shape = makeArcSeg(aSegs[i] - angCor, aSegs[i + 1] - angCor, rCirc, nThick)
+    if (nThick > 1) {styleShapeArea(shape,getRnCol(aUsedCols))} else {styleShape(shape,getRnCol(aUsedCols))}
+    shape.setName("Segment " + (aSegments[i]))
+    gr.addLayers([shape]);
+  }
+  placeLayer(gr)
+}
+
+var ticksCircle = function(rOutMaj, rOutMin, numMaj, numMin, nStrkMaj, nStrkMin, nThickMaj, nThickMin, angOmit) {
+  var gr = mkGroup(doc.currentPage(), "Tickmarks circle")
+  var c1 = getRnCol()
+  var c2 = getNeutralColor()
+  if (numMin > 0){
+    var grMin = mkGroup(gr, "Minor tickmarks")
+    var bPMin = makeBasePlate(rOutMin, nThickMin)
+    grMin.addLayers([bPMin])
+  }
+  var grMaj = mkGroup(gr, "Major tickmarks")
+  var bPMaj = makeBasePlate(rOutMaj, nThickMaj)
+  grMaj.addLayers([bPMaj])
+
+  var angRange = 2 * pi - angOmit
+  var angCor = (angOmit > 0) ? pi - (angOmit / 2) : 0
+  var nExtra = (angOmit > 0) ? 1 : 0
+  var cf = angRange * rOutMaj
+  var angPx = angRange / Math.round(cf)
+  var angDistTick = angRange / ((numMaj - nExtra) * (numMin + 1))
+  for(var i = 0; i < numMaj; i++){
+    var a = (i * (numMin + 1)) * angDistTick - angCor
+    var shape = makeArcSeg(a - ((nStrkMaj/2) * angPx) , a + ((nStrkMaj/2) * angPx), rOutMaj, nThickMaj)
+    if (nThickMaj > 1) {styleShapeArea(shape,c1)} else {styleShape(shape,c1)}
+    shape.setName("Tick major " + (i * (numMin + 1)))
+    grMaj.addLayers([shape]);
+
+    if(numMin >= 1 && (i < (numMaj - nExtra))){
+      var ub = (i == (numMaj + nExtra - 2)) ? numMin + 2 : numMin + 1
+      for(var j = 0; j < ub; j++){
+        var a = ((i * (numMin + 1)) + j) * angDistTick - angCor
+        var shape = makeArcSeg(a - ((nStrkMin/2) * angPx) , a + ((nStrkMin/2) * angPx), rOutMin, nThickMin)
+        if (nThickMin > 1) {styleShapeArea(shape,c2)} else {styleShape(shape,c2)}
+        shape.setName("Tick minor " + (((i * (numMin + 1)) + j) + 0))
+        grMin.addLayers([shape]);
+      }
+    }
+  }
+  rszHndls(grMaj)
+  rszHndls(grMin)
+  placeLayer(gr)
+}
+
+var dashedCircle = function(rCirc, lDash, lGap, nThick) {
+  var cf = 2 * pi * rCirc
+  var lSeg = lGap + lDash
+  var numSegs = Math.max(4, Math.floor(cf / lSeg))
+  var angSeg = 2 * pi / numSegs
+  var angDash = angSeg * lDash / lSeg
+  var angGap = angSeg - angDash
+
+  var gr = mkGroup(doc.currentPage(), "Dashed circle")
+  var bP = makeBasePlate(rCirc, nThick)
+  gr.addLayers([bP])
+
+  var c = getRnCol()
+  for(var i = 0; i < numSegs; i++){
+    var shape = makeArcSeg(angSeg * i, (angSeg * i) + angDash, rCirc, nThick)
+    if (nThick > 1) {styleShapeArea(shape, c)} else {styleShape(shape, c)}
+    shape.setName("Dash " + i)
+    gr.addLayers([shape])
+  }
+  placeLayer(gr)
+}
+
+
+//*********** util functions ***********//
+
+var computeBezierArc = function(angStart, angEnd, rSeg){
+  var lSeg = angEnd - angStart
+  var lCpHandle = rSeg * 4 / 3 * (Math.tan(lSeg / 4))
+  var aGeomFactor = [Math.cos(angStart - pi/2), Math.sin(angStart - pi/2)]
+  var pAnchor1 =     [rd2dec(aGeomFactor[0] * rSeg), rd2dec(aGeomFactor[1] * rSeg)]
+  var pLe1 =        [pAnchor1[0] - rd2dec(aGeomFactor[1] * lCpHandle), pAnchor1[1] + rd2dec(aGeomFactor[0] * lCpHandle)]
+  var pRi1 =        [pAnchor1[0] + rd2dec(aGeomFactor[1] * lCpHandle), pAnchor1[1] - rd2dec(aGeomFactor[0] * lCpHandle)]
+  aGeomFactor =     [Math.cos(angEnd - pi/2), Math.sin(angEnd - pi/2)]
+  var pAnchor2 =    [rd2dec(aGeomFactor[0] * rSeg), rd2dec(aGeomFactor[1] * rSeg)]
+  var pLe2 =        [pAnchor2[0] - rd2dec(aGeomFactor[1] * lCpHandle), pAnchor2[1] + rd2dec(aGeomFactor[0] * lCpHandle)]
+  var pRi2 =        [pAnchor2[0] + rd2dec(aGeomFactor[1] * lCpHandle), pAnchor2[1] - rd2dec(aGeomFactor[0] * lCpHandle)]
+
+  return {aBeg:pAnchor1, cPt1:pLe1, cPt2:pRi2, aEnd:pAnchor2}
+}
+
+var computeLargeBezierArc = function(angStart, angEnd, rSeg){
+  var angIdeal = 2 * pi / idealsegs
+  var nIdeal = Math.trunc((angEnd - angStart) / angIdeal)
+  if(nIdeal < 0){angIdeal *= (-1);nIdeal *= (-1);}
+  var aPts = []
+  var angCurr = angStart
+  for(i = 0; i < nIdeal + 1; i++){
+    if(i < nIdeal) {
+      aPts.push(computeBezierArc(angCurr, angCurr + angIdeal, rSeg))
+      angCurr += angIdeal
+    } else {
+      if(Math.abs(angEnd - angCurr) > 0.00001){ aPts.push(computeBezierArc(angCurr, angEnd, rSeg))}
+    }
+  }
+  return aPts;
+}
+
+var makeArcSeg = function(angStart, angEnd, rSeg, nThick){
+  var path = NSBezierPath.bezierPath()
+  var aPts = computeLargeBezierArc(angStart, angEnd, rSeg)
+  var nP = aPts.length
+  for(var j = 0; j < nP; j++){
+    if(j == 0) {path.moveToPoint(NSMakePoint(aPts[0].aBeg[0], aPts[0].aBeg[1]))}
+    path.curveToPoint_controlPoint1_controlPoint2(NSMakePoint(aPts[j].aEnd[0], aPts[j].aEnd[1]), NSMakePoint(aPts[j].cPt1[0], aPts[j].cPt1[1]), NSMakePoint(aPts[j].cPt2[0], aPts[j].cPt2[1]))
+  }
+  if (nThick > 1) {
+    var rIn = rSeg - nThick
+    var aPt2 = computeLargeBezierArc(angEnd, angStart, rIn)
+    n2 = aPt2.length
+    for(var k = 0; k < n2; k++){
+      if(k == 0) {path.lineToPoint(NSMakePoint(aPt2[0].aBeg[0], aPt2[0].aBeg[1]))}
+      path.curveToPoint_controlPoint1_controlPoint2(NSMakePoint(aPt2[k].aEnd[0], aPt2[k].aEnd[1]), NSMakePoint(aPt2[k].cPt1[0], aPt2[k].cPt1[1]), NSMakePoint(aPt2[k].cPt2[0], aPt2[k].cPt2[1]))
+    }
+    path.closePath()
+  }
+  var msPath = MSPath.pathWithBezierPath(path)
+  return MSLayer.layerWithPath(msPath)
+}
+
+var makeBasePlate = function(r, nThick){
+  var shape = makeArcSeg(0, 2 * pi, r, nThick)
+  var c = getNeutralColor()
+  c.alpha = 0.002
+  var fill = mkFill(shape)
+  fill.color = c
+  shape.setName("Base plate")
+  return shape
+}
+
+var rd2dec = function(num) {
+    return Math.round(num * 100) / 100;
+}
+
+var preProcSeg = function(aSegments, angOmit){
+  var aSegs = [0]
+  var total = 0;
+  var n = aSegments.length;
+  var i = n;
+  var angRange = (2 * pi) - angOmit
+  var angCor = (angOmit > 0) ? pi - (angOmit / 2) : 0
+  while (i--) {total += parseInt(aSegments[i])}
+  var factor = angRange / total
+  for (i=1; i<=n; i++) {aSegs.push(aSegs[i-1] + (parseInt(aSegments[i-1]) * factor))}
+  aSegs[aSegs.length - 1] = angRange
+  return aSegs
+}
+
+var deg2rdns = function(angDeg) {
+  return angDeg * (2 * pi / 360)
+}
+
+var alert = function(sText, sTitle) {
+  var dlg = NSAlert.alloc().init()
+  dlg.setMessageText(sTitle)
+  dlg.setInformativeText(sText)
+  dlg.runModal()
+}
+
+var getViewF = function(){
+  var view = doc.contentDrawView()
+  return view.frame()
+}
+
+var styleShape = function(shapeGr, msC){
+  var border = mkBorder(shapeGr)
+  border.color = msC
+  border.thickness = 2
+}
+
+var styleShapeArea = function(shapeGr, msC){
+  var fill = mkFill(shapeGr)
+  fill.setFillType(0)
+  fill.color = msC
+  var border = mkBorder(shapeGr)
+  border.color = colorWithHexString("#ffffff")
+  border.thickness = .25
+  border.position = 1
+}
+
+function mkFill(shapeGr){
+  return shapeGr.style().addStylePartOfType(0)
+}
+
+function mkBorder(shapeGr){
+  return shapeGr.style().addStylePartOfType(5)
+}
+
+function colorWithHexString(sHex){
+  return MSImmutableColor.colorWithSVGString(sHex).newMutableCounterpart()
+}
+
+function mkGroup(parentL, name) {
+  var group = MSLayerGroup.new()
+  parentL.addLayers([group])
+  group.setName(name)
+  return group
+}
+
+var placeLayer = function(lyr){
+  rszHndls(lyr)
+  var rL = lyr.rect();
+  var v = getViewF();
+  var so = doc.scrollOrigin()
+  var zv = doc.zoomValue()
+  var vX = (v.size.width / 2 - so.x) / zv;
+  var vY = (v.size.height / 2 - so.y) / zv;
+  rL.origin.x = vX
+  rL.origin.y = vY
+  lyr.setRect(rL)
+}
+
+var rszHndls = function(lyr){
+  lyr.resizeToFitChildren()
+}
+
+var getRnCol = function(aUsedSoFar){
+  var aCols = ["#B71C1C","#e91e63","#9c27b0","#673ab7","#3f51b5","#2196f3","#0288D1","#00bcd4","#00bcd4","#4caf50","#8bc34a","#cddc39","#F9A825","#FF8F00","#F57C00","#D84315","#795548","#9e9e9e","#607d8b"]
+  var c
+  if((aUsedSoFar) && (aUsedSoFar.length < aCols.length)){
+    do {
+      c = aCols[Math.floor(Math.random() * aCols.length)]
+    } while(aUsedSoFar.indexOf(c) != -1)
+    aUsedSoFar.push(c)
+  } else {
+    c = aCols[Math.floor(Math.random() * aCols.length)]
+  }
+  var msc = colorWithHexString(c);
+  return msc
+}
+
+var getNeutralColor = function(){
+  var msc = colorWithHexString("#455A64");
+  return msc
+}
+
+var showDlg = function(sMsg, sInfo, aFields, sBtnGoText){
+  var dlg = COSAlertWindow.new()
+  dlg.setMessageText(sMsg || "Plugin dialog")
+  dlg.setInformativeText(sInfo || "To run this plugin more data will be needed")
+  for(var i = 0; i < aFields.length; i++){
+    dlg.addTextLabelWithValue(aFields[i].label.toString() || ("Field " + i))
+    dlg.addTextFieldWithValue(aFields[i].data.toString()  || ("Data " + i))
+  }
+  dlg.addButtonWithTitle( sBtnGoText || 'OK')
+  dlg.addButtonWithTitle('Cancel')
+  var aResults = []
+  if(dlg.runModal() == 1000) {
+    for(var i = 1; i < aFields.length * 2; i+=2) {
+      aResults.push(dlg.viewAtIndex(i).stringValue().toString())
+    }
+  } else {
+    aResults = nil
+  }
+  return aResults
+}
+
+var resetToDef = function() {
+  var def = NSUserDefaults.standardUserDefaults()
+  def.removeObjectForKey("gb_segCircle_dsh")
+  def.removeObjectForKey("gb_segCircle_tix")
+  def.removeObjectForKey("gb_segCircle_var")
+  def.removeObjectForKey("gb_segCircle_seg")
+}
